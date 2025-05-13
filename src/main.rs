@@ -2,8 +2,12 @@ use colored::Colorize;
 use colored_hexdump::hexdump;
 use tokio::io::AsyncReadExt;
 
-async fn get_http_request(buffer: &[u8]) {
-    
+fn get_http_request(buffer: &[u8]) {
+    let something = &buffer[0..4];
+
+    let string = String::from_utf8_lossy(something);
+    println!("{}", string);
+
 }
 
 #[tokio::main]
@@ -36,6 +40,7 @@ async fn main() {
                     let hexdump = hexdump(&buffer);
                     println!("{}", hexdump);
 
+                    get_http_request(&buffer);
                 }                
             }
         }
