@@ -1,17 +1,21 @@
+use colored::Colorize;
 use colored_hexdump::hexdump;
 use tokio::io::AsyncReadExt;
 
+async fn get_http_request(buffer: &[u8]) {
+    
+}
 
 #[tokio::main]
 async fn main() {
 
     if let Ok(listener) = tokio::net::TcpListener::bind("127.0.0.1:3000").await {
-        println!("Listening on port 3000");
+        println!("Listening on port {}", "3000".cyan());
 
         loop {
             if let Ok((mut socket, addr)) = listener.accept().await {
 
-                println!("Accepted connection from {}", addr);
+                println!("Accepted connection from {}", addr.to_string().green());
 
                 let mut buffer = Vec::new();
                 loop {
@@ -19,8 +23,6 @@ async fn main() {
 
                     match socket.read(&mut temp_buffer).await {
                         Ok(n) if n == 0 => {
-                            let hexdump = hexdump(&buffer);
-                            println!("{}", hexdump);
                             break;
                         }
                         Ok(n) => {
@@ -28,11 +30,11 @@ async fn main() {
                         }
                         Err(e) => {
                             eprintln!("Error reading from socket: {}", e);
-                            let hexdump = hexdump(&buffer);
-                            println!("{}", hexdump);
                             break;
                         }
                     }
+                    let hexdump = hexdump(&buffer);
+                    println!("{}", hexdump);
 
                 }                
             }
