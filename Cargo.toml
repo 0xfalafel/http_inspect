@@ -1,0 +1,8 @@
+[package]
+name = "http_inspect"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+colored-hexdump = "0.2.2"
+tokio = { version = "1.45.0", features = ["full"] }
