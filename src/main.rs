@@ -5,6 +5,15 @@ use tokio::io::AsyncReadExt;
 fn get_http_request(buffer: &[u8]) {
     let something = &buffer[0..4];
 
+    // find the end of the HTTP header
+    if let Some(end_header) = buffer.windows(4).position(|window| window == b"\x0d\x0a\x0d\x0a" ) {
+        println!("end_header: {}", end_header);
+        let header =&buffer[..end_header+2];
+
+        let hexdump = hexdump(header);
+        println!("{hexdump}");
+    }
+
     let string = String::from_utf8_lossy(something);
     println!("{}", string);
 
