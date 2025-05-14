@@ -1,6 +1,6 @@
 use colored::Colorize;
 use colored_hexdump::hexdump;
-use tokio::io::AsyncReadExt;
+use tokio::{io::AsyncReadExt, net::TcpStream};
 
 /// This function tells us if we have a complete HTTP request in the buffer.
 /// * If it return None, the request is incomplete, and we should wait for the end of the request.
@@ -57,6 +57,44 @@ fn get_content_length(data: &[u8]) -> Option<usize>{
     None
 }
 
+async fn receive_http_requests(mut socket: TcpStream) {
+    let mut buffer: Vec<u8> = Vec::new();
+    loop {
+        let mut temp_buffer = vec![0u8; 1024];
+
+        match socket.read(&mut temp_buffer).await {
+            Ok(0) => {
+                break;
+            }
+            Ok(n) => {
+                buffer.extend_from_slice(&temp_buffer[..n]);
+            }
+            Err(e) => {
+                eprintln!("Error reading from socket: {}", e);
+                break;
+            }
+        }
+        // let dump = hexdump(&buffer);
+        // println!("{}", dump);
+
+        while let Some(end_of_request) = http_request_size(&buffer) {
+            let req = &buffer[..end_of_request];
+
+            // push the data somewhere
+            let dbg = hexdump(req);
+            println!("{}", dbg);
+
+            // Remove the request we have consumed from the buffer
+            buffer = buffer.drain(end_of_request..).collect();
+
+            // content of buffer after cleanup
+            // let dbg = hexdump(&buffer);
+            // println!("{}", dbg);
+        }
+    }                
+
+}
+
 
 #[tokio::main]
 async fn main() {
@@ -65,44 +103,12 @@ async fn main() {
         println!("Listening on port {}", "3000".cyan());
 
         loop {
-            if let Ok((mut socket, addr)) = listener.accept().await {
-
+            if let Ok((socket, addr)) = listener.accept().await {
                 println!("Accepted connection from {}", addr.to_string().green());
 
-                let mut buffer: Vec<u8> = Vec::new();
-                loop {
-                    let mut temp_buffer = vec![0u8; 1024];
-
-                    match socket.read(&mut temp_buffer).await {
-                        Ok(0) => {
-                            break;
-                        }
-                        Ok(n) => {
-                            buffer.extend_from_slice(&temp_buffer[..n]);
-                        }
-                        Err(e) => {
-                            eprintln!("Error reading from socket: {}", e);
-                            break;
-                        }
-                    }
-                    // let dump = hexdump(&buffer);
-                    // println!("{}", dump);
-
-                    while let Some(end_of_request) = http_request_size(&buffer) {
-                        let req = &buffer[..end_of_request];
-
-                        // push the data somewhere
-                        let dbg = hexdump(req);
-                        println!("{}", dbg);
-
-                        // Remove the request we have consumed from the buffer
-                        buffer = buffer.drain(end_of_request..).collect();
-
-                        // content of buffer after cleanup
-                        // let dbg = hexdump(&buffer);
-                        // println!("{}", dbg);
-                    }
-                }                
+                tokio::spawn(async move {
+                    receive_http_requests(socket).await
+                });
             }
         }
     } else {
