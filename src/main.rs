@@ -10,7 +10,12 @@ fn get_http_request(buffer: &[u8]) {
     if let Some(end_header) = buffer.windows(4).position(|window| window == b"\x0d\x0a\x0d\x0a" ) {
         println!("end_header: {}", end_header);
         let header =&buffer[..end_header];
-        get_content_length(header);
+
+        if let Some(content_length) = get_content_length(header) {
+            println!("Content-Length: {}", content_length);
+        } else {
+            println!("No Content-Length");
+        }
 
         // let hexdump = hexdump(header);
         // println!("{hexdump}");
@@ -21,21 +26,25 @@ fn get_http_request(buffer: &[u8]) {
 
 }
 
-/// Extract the Content-Length of an HTTP Request
+/// Extract the Content-Length of an HTTP header
 /// `Content-Length: 24` will return 24
 fn get_content_length(data: &[u8]) -> Option<usize>{
+
+    // We take bytes as input, and look at each line, to make sure our function
+    // doesn't fail if there are non-utf8 chars in the header
     let headers: Vec<&[u8]> = data.split(|&byte| byte == b'\n').collect();
 
     // For each header, we decode the bytes, and see if it's a Content-Length header
     for header_bytes in headers {
 
-        // Header should be ASCII
+        // Content-Length should be ASCII
         if let Ok(header) = String::from_utf8(header_bytes.to_vec()) {
             if header.to_lowercase().contains("content-length") {
 
                 // Split and `:` and return the size as an `usize`
                 if let Some(len) = header.split(':').nth(1) {
-                    match usize::from_str_radix(len, 10) {
+
+                    match usize::from_str_radix(len.trim(), 10) {
                         Ok(content_length) => return Some(content_length),
                         Err(_) => {},
                     }
