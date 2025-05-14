@@ -35,7 +35,7 @@ async fn main() {
                     let mut temp_buffer = vec![0u8; 1024];
 
                     match socket.read(&mut temp_buffer).await {
-                        Ok(n) if n == 0 => {
+                        Ok(0) => {
                             break;
                         }
                         Ok(n) => {
