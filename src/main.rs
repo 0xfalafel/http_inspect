@@ -2,28 +2,30 @@ use colored::Colorize;
 use colored_hexdump::hexdump;
 use tokio::io::AsyncReadExt;
 
-/// Extract an HTTP request from a byte slice
-fn get_http_request(buffer: &[u8]) {
-    let something = &buffer[0..4];
-
+/// This function tells us if we have a complete HTTP request in the buffer.
+/// * If it return None, the request is incomplete, and we should wait for the end of the request.
+/// * If it returns Some(len), we can extract a request of size `len`.
+///
+/// This function doesn't check if the HTTP is correct, we just use '\n\r\n\r' and the Content-Length header
+fn http_request_size(buffer: &[u8]) -> Option<usize> {
     // find the end of the HTTP header
     if let Some(end_header) = buffer.windows(4).position(|window| window == b"\x0d\x0a\x0d\x0a" ) {
-        println!("end_header: {}", end_header);
+        // println!("end_header: 0x{:x}", end_header);
         let header =&buffer[..end_header];
 
         if let Some(content_length) = get_content_length(header) {
-            println!("Content-Length: {}", content_length);
+            // println!("Content-Length: {}", content_length);
+            let end_req_with_data = end_header + 4 + content_length;
+
+            if buffer.len() >= end_req_with_data {
+                return Some(end_req_with_data)
+            }
         } else {
-            println!("No Content-Length");
+            return Some(end_header+4)
         }
-
-        // let hexdump = hexdump(header);
-        // println!("{hexdump}");
     }
-
-    let string = String::from_utf8_lossy(something);
-    println!("{}", string);
-
+    
+    None
 }
 
 /// Extract the Content-Length of an HTTP header
@@ -67,7 +69,7 @@ async fn main() {
 
                 println!("Accepted connection from {}", addr.to_string().green());
 
-                let mut buffer = Vec::new();
+                let mut buffer: Vec<u8> = Vec::new();
                 loop {
                     let mut temp_buffer = vec![0u8; 1024];
 
@@ -83,10 +85,23 @@ async fn main() {
                             break;
                         }
                     }
-                    let hexdump = hexdump(&buffer);
-                    println!("{}", hexdump);
+                    // let dump = hexdump(&buffer);
+                    // println!("{}", dump);
 
-                    get_http_request(&buffer);
+                    while let Some(end_of_request) = http_request_size(&buffer) {
+                        let req = &buffer[..end_of_request];
+
+                        // push the data somewhere
+                        let dbg = hexdump(req);
+                        println!("{}", dbg);
+
+                        // Remove the request we have consumed from the buffer
+                        buffer = buffer.drain(end_of_request..).collect();
+
+                        // content of buffer after cleanup
+                        // let dbg = hexdump(&buffer);
+                        // println!("{}", dbg);
+                    }
                 }                
             }
         }
