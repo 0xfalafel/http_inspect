@@ -2,22 +2,50 @@ use colored::Colorize;
 use colored_hexdump::hexdump;
 use tokio::io::AsyncReadExt;
 
+/// Extract an HTTP request from a byte slice
 fn get_http_request(buffer: &[u8]) {
     let something = &buffer[0..4];
 
     // find the end of the HTTP header
     if let Some(end_header) = buffer.windows(4).position(|window| window == b"\x0d\x0a\x0d\x0a" ) {
         println!("end_header: {}", end_header);
-        let header =&buffer[..end_header+2];
+        let header =&buffer[..end_header];
+        get_content_length(header);
 
-        let hexdump = hexdump(header);
-        println!("{hexdump}");
+        // let hexdump = hexdump(header);
+        // println!("{hexdump}");
     }
 
     let string = String::from_utf8_lossy(something);
     println!("{}", string);
 
 }
+
+/// Extract the Content-Length of an HTTP Request
+/// `Content-Length: 24` will return 24
+fn get_content_length(data: &[u8]) -> Option<usize>{
+    let headers: Vec<&[u8]> = data.split(|&byte| byte == b'\n').collect();
+
+    // For each header, we decode the bytes, and see if it's a Content-Length header
+    for header_bytes in headers {
+
+        // Header should be ASCII
+        if let Ok(header) = String::from_utf8(header_bytes.to_vec()) {
+            if header.to_lowercase().contains("content-length") {
+
+                // Split and `:` and return the size as an `usize`
+                if let Some(len) = header.split(':').nth(1) {
+                    match usize::from_str_radix(len, 10) {
+                        Ok(content_length) => return Some(content_length),
+                        Err(_) => {},
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 
 #[tokio::main]
 async fn main() {
@@ -53,5 +81,7 @@ async fn main() {
                 }                
             }
         }
+    } else {
+        eprintln!("{} to bind {}", "Failed".red(), "127.0.0.1:3000".red())
     }
 }
