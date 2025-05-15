@@ -1,5 +1,6 @@
 use colored_hexdump::hexdump;
 use tokio::{io::AsyncReadExt, net::TcpStream};
+use tokio::sync::mpsc::Sender;
 
 /// This function tells us if we have a complete HTTP request in the buffer.
 /// * If it return None, the request is incomplete, and we should wait for the end of the request.
@@ -56,7 +57,7 @@ fn get_content_length(data: &[u8]) -> Option<usize>{
     None
 }
 
-pub async fn receive_http_requests(mut socket: TcpStream) {
+pub async fn receive_http_requests(mut socket: TcpStream, tx: Sender<Vec<u8>>) {
     let mut buffer: Vec<u8> = Vec::new();
     loop {
         let mut temp_buffer = vec![0u8; 1024];
@@ -80,8 +81,14 @@ pub async fn receive_http_requests(mut socket: TcpStream) {
             let req = &buffer[..end_of_request];
 
             // push the data somewhere
-            let dbg = hexdump(req);
-            println!("{}", dbg);
+            let res = tx.send(req.to_vec()).await;
+            if let Err(e) = res {
+                eprintln!("Failed to transmit http request: {}", e);
+                eprintln!("{}", hexdump(req));
+            }
+
+            // let dbg = hexdump(req);
+            // println!("{}", dbg);
 
             // Remove the request we have consumed from the buffer
             buffer = buffer.drain(end_of_request..).collect();
