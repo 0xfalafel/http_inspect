@@ -19,14 +19,13 @@ impl Display for ProxyError {
     }
 }
 
-
 fn extract_host(req: &[u8]) -> Result<String, ProxyError> {
     let first_line = req.split(|b| *b == b'\n').nth(0)
         .ok_or(ProxyError::NoDestination)?;
-    let first_line = String::from_utf8(first_line.to_vec())
+    let first_line_decoded = String::from_utf8(first_line.to_vec())
         .map_err(|_| ProxyError::NoDestination)?;
 
-    let destination = first_line.split_whitespace().nth(1)
+    let destination = first_line_decoded.split_whitespace().nth(1)
         .ok_or(ProxyError::NoDestination)?;
     println!("{}", destination);
     
@@ -40,7 +39,10 @@ pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) {
         let hexdata = hexdump(&http_request);
         println!("{}", hexdata);
 
-        extract_host(&http_request);
+        let dest = match extract_host(&http_request) {
+            Ok(host) => host,
+            Err(_) => return,
+        };
 
         // let http_request_str = String::from_utf8(http_request).unwrap();
         // println!("{}", http_request_str);
