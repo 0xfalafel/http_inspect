@@ -11,7 +11,7 @@ use crate::http_utils::{find_header, get_header, remove_header};
 pub enum ProxyError {
     NoDestination,
     CouldNotConnectToRemote(String),
-    FailedToWriteToRemote,
+    FailedToWriteToRemote(String),
 }
 impl Error for ProxyError {}
 
@@ -20,6 +20,7 @@ impl Display for ProxyError {
         let msg = match self {
             Self::NoDestination => "Could not read destination in the first line of the HTTP request.",
             Self::CouldNotConnectToRemote(host) => &format!("Could not connect to remote host {}", host),
+            Self::FailedToWriteToRemote(host) => &format!("Could not write to socket connected to {}", host),
         };
         write!(f, "{}",msg)
     }
@@ -140,8 +141,9 @@ pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) -> Result<(), Prox
 
         match tcp_stream.write_all(&http_request).await {
             Ok(()) => {},
-            Err(_) => return Err(ProxyError::FailedToWriteToRemote),
+            Err(_) => return Err(ProxyError::FailedToWriteToRemote(host.clone())),
         };
+
 
         //tcp_stream.read(buf);
     }
