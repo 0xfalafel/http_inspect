@@ -1,4 +1,5 @@
 use colored_hexdump::hexdump;
+use tokio::io::ReadHalf;
 use tokio::{io::AsyncReadExt, net::TcpStream};
 use tokio::sync::mpsc::Sender;
 
@@ -57,7 +58,7 @@ fn get_content_length(data: &[u8]) -> Option<usize>{
     None
 }
 
-pub async fn receive_http_requests(mut socket: TcpStream, tx: Sender<Vec<u8>>) {
+pub async fn receive_http_requests(mut socket: ReadHalf<TcpStream>, tx: Sender<Vec<u8>>) {
     let mut buffer: Vec<u8> = Vec::new();
     loop {
         let mut temp_buffer = vec![0u8; 1024];
@@ -74,8 +75,6 @@ pub async fn receive_http_requests(mut socket: TcpStream, tx: Sender<Vec<u8>>) {
                 break;
             }
         }
-        // let dump = hexdump(&buffer);
-        // println!("{}", dump);
 
         while let Some(end_of_request) = http_request_size(&buffer) {
             let req = &buffer[..end_of_request];
@@ -87,15 +86,8 @@ pub async fn receive_http_requests(mut socket: TcpStream, tx: Sender<Vec<u8>>) {
                 eprintln!("{}", hexdump(req));
             }
 
-            // let dbg = hexdump(req);
-            // println!("{}", dbg);
-
             // Remove the request we have consumed from the buffer
             buffer = buffer.drain(end_of_request..).collect();
-
-            // content of buffer after cleanup
-            // let dbg = hexdump(&buffer);
-            // println!("{}", dbg);
         }
     }                
 
