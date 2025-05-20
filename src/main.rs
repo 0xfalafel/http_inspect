@@ -14,20 +14,21 @@ async fn main() {
 
     if let Ok(listener) = tokio::net::TcpListener::bind("127.0.0.1:3000").await {
         println!("Listening on port {}", "3000".cyan());
-        let (tx, rx) = mpsc::channel::<Vec<u8>>(32);
-        
+        let (listener_tx, listener_rx) = mpsc::channel::<Vec<u8>>(32);
+        // let (remote_tx, remote_rx) = mpsc::channel::<Vec<u8>>(32);
+
 
         tokio::spawn(async move {
-            forward_http_requests(rx).await
+            forward_http_requests(listener_rx).await
         });
 
         loop {
             if let Ok((socket, addr)) = listener.accept().await {
                 println!("Accepted connection from {}", addr.to_string().green());
 
-                let tx = tx.clone();
+                let listener_tx = listener_tx.clone();
                 tokio::spawn(async move {
-                    receive_http_requests(socket, tx).await
+                    receive_http_requests(socket, listener_tx).await
                 });
             }
         }

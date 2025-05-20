@@ -1,21 +1,25 @@
 use std::error::Error;
 use std::fmt::{self, Display};
 
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::Receiver;
 use colored_hexdump::hexdump;
 
 use crate::http_utils::{find_header, get_header, remove_header};
 
 #[derive(Debug)]
-enum ProxyError {
+pub enum ProxyError {
     NoDestination,
+    CouldNotConnectToRemote(String),
+    FailedToWriteToRemote,
 }
 impl Error for ProxyError {}
 
 impl Display for ProxyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let msg = match self {
-            Self::NoDestination => "Could not read destination in the first line of the HTTP request."
+            Self::NoDestination => "Could not read destination in the first line of the HTTP request.",
+            Self::CouldNotConnectToRemote(host) => &format!("Could not connect to remote host {}", host),
         };
         write!(f, "{}",msg)
     }
@@ -105,7 +109,7 @@ fn extract_host(destination: &str) -> (Scheme, String) {
     (Scheme::Http, host)
 }
 
-pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) {
+pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) -> Result<(), ProxyError>{
     
     while let Some(http_request) = rx.recv().await {
         let hexdata = hexdump(&http_request);
@@ -113,7 +117,7 @@ pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) {
         
         let destination = match extract_destination(&http_request) {
             Ok(host) => host,
-            Err(_) => return,
+            Err(_) => return Err(ProxyError::NoDestination),
         };
         
         println!("Destination: {}", destination);
@@ -121,12 +125,26 @@ pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) {
         let http_request = replace_proxy_destination(http_request, &destination);
         let http_request = remove_header(http_request, "Proxy-Connection");
 
-        let (scheme, host) = extract_host(&destination);
-
-
-        
+        let (_scheme, host) = extract_host(&destination);
+      
         println!("Request to send:");
-        let http_request_str = String::from_utf8(http_request).unwrap();
+        let http_request_str = String::from_utf8(http_request.clone()).unwrap();
         println!("{}", http_request_str);
+
+        // TODO: Handle TLS stream if Scheme::Https
+        let mut tcp_stream = match tokio::net::TcpStream::connect(&host).await {
+            Ok(stream) => stream,
+            Err(_) => return Err(ProxyError::CouldNotConnectToRemote(host.clone()))
+        };
+
+
+        match tcp_stream.write_all(&http_request).await {
+            Ok(()) => {},
+            Err(_) => return Err(ProxyError::FailedToWriteToRemote),
+        };
+
+        //tcp_stream.read(buf);
     }
+
+    Ok(())
 }
