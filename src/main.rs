@@ -7,6 +7,7 @@ use receive_requests::receive_http_requests;
 mod transmit_request;
 use transmit_request::forward_http_requests;
 
+mod http_utils;
 
 #[tokio::main]
 async fn main() {

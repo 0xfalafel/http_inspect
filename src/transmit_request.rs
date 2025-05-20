@@ -4,6 +4,8 @@ use std::fmt::{self, Display};
 use tokio::sync::mpsc::Receiver;
 use colored_hexdump::hexdump;
 
+use crate::http_utils::{find_header, get_header};
+
 #[derive(Debug)]
 enum ProxyError {
     NoDestination,
@@ -42,12 +44,13 @@ fn extract_host(req: &[u8]) -> Result<String, ProxyError> {
     // We still need a destination (to contact the remote server). Let's extract the destination from the
     // Host header
     if destination.is_empty() {
-        eprintln!("We should try something else!");
-        let hexdata = hexdump(&req);
-        println!("{}", hexdata);
+        match get_header(&req, "Host") {
+            Some(dest) => return Ok(dest),
+            None => return Err(ProxyError::NoDestination),
+        }
+    } else {
+        Ok(destination.to_string())
     }
-
-    Ok(destination.to_string())
 }
 
 /// Remove the destination in the first line of the request. 
