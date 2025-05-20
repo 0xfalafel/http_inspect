@@ -4,7 +4,7 @@ use std::fmt::{self, Display};
 use tokio::sync::mpsc::Receiver;
 use colored_hexdump::hexdump;
 
-use crate::http_utils::{find_header, get_header};
+use crate::http_utils::{find_header, get_header, remove_header};
 
 #[derive(Debug)]
 enum ProxyError {
@@ -80,8 +80,11 @@ pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) {
         println!("Destination: {}", destination);
         
         let http_request = replace_proxy_destination(http_request, destination);
+        let http_request = remove_header(http_request, "Proxy-Connection");
 
-        // let http_request_str = String::from_utf8(http_request).unwrap();
-        // println!("{}", http_request_str);
+
+        println!("Request to send:");
+        let http_request_str = String::from_utf8(http_request).unwrap();
+        println!("{}", http_request_str);
     }
 }
