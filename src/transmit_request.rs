@@ -21,7 +21,7 @@ impl Display for ProxyError {
     }
 }
 
-fn extract_host(req: &[u8]) -> Result<String, ProxyError> {
+fn extract_destination(req: &[u8]) -> Result<String, ProxyError> {
     // We try to see if there is a destination in the first line.
     // When contacting proxy, the first line will have the destination, like
     // `GET http://google.com/whoami/pwn HTTP/1.1` instead of the classic `GET /whoami/pwd HTTP/1.1`
@@ -56,7 +56,7 @@ fn extract_host(req: &[u8]) -> Result<String, ProxyError> {
 /// Remove the destination in the first line of the request. 
 /// GET http://google.com/whoami HTTP/1.1 become
 /// GET /whoami HTTP/1.1
-fn replace_proxy_destination(mut http_request: Vec<u8>, destination: String) -> Vec<u8> {
+fn replace_proxy_destination(mut http_request: Vec<u8>, destination: &str) -> Vec<u8> {
     let proxy_destination = destination.as_bytes();
 
     if let Some(pos) = http_request.windows(proxy_destination.len()).position(|window| window == proxy_destination) {
@@ -66,23 +66,65 @@ fn replace_proxy_destination(mut http_request: Vec<u8>, destination: String) -> 
     http_request
 }
 
+enum Scheme {
+    Http,
+    Https,
+}
+
+/// http://google.com:3400 -> google.com 3400
+fn extract_host(destination: &str) -> (Scheme, String) {
+    // Handle the http(s) at the begining of `destination`
+    // It might not be present
+    let scheme = match destination {
+        destination if destination.starts_with("http://") => Some(Scheme::Http),
+        destination if destination.starts_with("https://") => Some(Scheme::Https),
+        _ => None
+    };
+
+    let destination = match scheme {
+        Some(Scheme::Http) => &destination[7..],
+        Some(Scheme::Https) => &destination[8..],
+        _ => destination,
+    };
+
+    // Remove path if present
+    // There is already no path
+    // let destination = destination.split('/').nth(0).unwrap_or(destination);
+    
+    let scheme = scheme.unwrap_or(Scheme::Http);
+    
+    // we need a port to connect to. Precise one if there are none specified
+    let mut host = destination.to_owned();
+    if !host.contains(':') {
+        match scheme {
+            Scheme::Http => host.push_str(":80"),
+            Scheme::Https => host.push_str(":443"),
+        }
+    }
+
+    (Scheme::Http, host)
+}
+
 pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) {
     
     while let Some(http_request) = rx.recv().await {
         let hexdata = hexdump(&http_request);
         println!("{}", hexdata);
         
-        let destination = match extract_host(&http_request) {
+        let destination = match extract_destination(&http_request) {
             Ok(host) => host,
             Err(_) => return,
         };
         
         println!("Destination: {}", destination);
         
-        let http_request = replace_proxy_destination(http_request, destination);
+        let http_request = replace_proxy_destination(http_request, &destination);
         let http_request = remove_header(http_request, "Proxy-Connection");
 
+        let (scheme, host) = extract_host(&destination);
 
+
+        
         println!("Request to send:");
         let http_request_str = String::from_utf8(http_request).unwrap();
         println!("{}", http_request_str);
