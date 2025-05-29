@@ -26,14 +26,19 @@ async fn main() {
                 let (listener_tx, listener_rx) = mpsc::channel::<Vec<u8>>(32);
                 let (remote_tx, remote_rx) = mpsc::channel::<Vec<u8>>(32);
 
+                // Receive the HTTP Request on the port listening
                 tokio::spawn(async move {
                     receive_http_requests(socket_read, listener_tx).await
                 });
 
+                // Parse the HTTP Request, rewrite it, and forward it to
+                // the destination.
+                // Read the HTTP Response
                 tokio::spawn(async move {
                     forward_http_requests(listener_rx, remote_tx).await
                 });
 
+                // Write the HTTP Response to the socket of the listener
                 tokio::spawn(async move {
                     forward_response(remote_rx, socket_write).await
                 });

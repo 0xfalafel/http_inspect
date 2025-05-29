@@ -1,12 +1,12 @@
 use std::error::Error;
 use std::fmt::{self, Display};
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::{Receiver, Sender};
-use colored_hexdump::hexdump;
+// use colored_hexdump::hexdump;
 use tokio::task::JoinHandle;
 
-use crate::http_utils::{find_header, get_header, remove_header};
+use crate::http_utils::{get_header, remove_header};
 use crate::receive_requests::receive_http_requests;
 
 #[derive(Debug)]
@@ -116,27 +116,25 @@ fn extract_host(destination: &str) -> (Scheme, String) {
 
 pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>>) -> Result<(), ProxyError>{
     
-    let mut handle: JoinHandle<()>; 
+    let mut handle: JoinHandle<()> = tokio::spawn(async {});
 
     while let Some(http_request) = rx.recv().await {
-        let hexdata = hexdump(&http_request);
-        println!("{}", hexdata);
+        // let hexdata = hexdump(&http_request);
+        // println!("{}", hexdata);
         
         let destination = match extract_destination(&http_request) {
             Ok(host) => host,
             Err(_) => return Err(ProxyError::NoDestination),
         };
         
-        println!("Destination: {}", destination);
-        
         let http_request = replace_proxy_destination(http_request, &destination);
         let http_request = remove_header(http_request, "Proxy-Connection");
 
         let (_scheme, host) = extract_host(&destination);
       
-        println!("Request to send:");
-        let http_request_str = String::from_utf8(http_request.clone()).unwrap();
-        println!("{}", http_request_str);
+        // println!("Request to send:");
+        // let http_request_str = String::from_utf8(http_request.clone()).unwrap();
+        // println!("{}", http_request_str);
 
         // TODO: Handle TLS stream if Scheme::Https
         let tcp_stream = match tokio::net::TcpStream::connect(&host).await {
@@ -151,8 +149,7 @@ pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>
             Err(_) => return Err(ProxyError::FailedToWriteToRemote(host.clone())),
         };
 
-        if !handle.is_finished() {
-
+        if handle.is_finished() {
             let tx = tx.clone();
             handle = tokio::spawn(async move {
                 receive_http_requests(socket_read, tx).await

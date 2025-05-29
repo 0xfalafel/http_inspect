@@ -76,6 +76,9 @@ pub async fn receive_http_requests(mut socket: ReadHalf<TcpStream>, tx: Sender<V
             }
         }
 
+        // let hexdump = hexdump(&temp_buffer);
+        // eprintln!("Received:\n{}", hexdump);
+
         while let Some(end_of_request) = http_request_size(&buffer) {
             let req = &buffer[..end_of_request];
 

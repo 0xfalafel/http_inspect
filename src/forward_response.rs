@@ -1,4 +1,3 @@
-use colored_hexdump::hexdump;
 use tokio::io::{AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::Receiver;
@@ -13,6 +12,5 @@ pub async fn forward_response(mut rx: Receiver<Vec<u8>>, mut socket: WriteHalf<T
             Err(_) => return Err(ProxyError::FailedToWriteToListener),
         }
     }
-
     Ok(())
 }
