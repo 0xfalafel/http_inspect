@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{self, Display};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{Receiver, Sender};
 use colored_hexdump::hexdump;
 
 use crate::http_utils::{find_header, get_header, remove_header};
@@ -12,6 +12,7 @@ pub enum ProxyError {
     NoDestination,
     CouldNotConnectToRemote(String),
     FailedToWriteToRemote(String),
+    FailedToWriteToListener,
 }
 impl Error for ProxyError {}
 
@@ -21,6 +22,7 @@ impl Display for ProxyError {
             Self::NoDestination => "Could not read destination in the first line of the HTTP request.",
             Self::CouldNotConnectToRemote(host) => &format!("Could not connect to remote host {}", host),
             Self::FailedToWriteToRemote(host) => &format!("Could not write to socket connected to {}", host),
+            Self::FailedToWriteToListener => "Could not write the http response to the listener socket",
         };
         write!(f, "{}",msg)
     }
@@ -110,7 +112,7 @@ fn extract_host(destination: &str) -> (Scheme, String) {
     (Scheme::Http, host)
 }
 
-pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>) -> Result<(), ProxyError>{
+pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>, mut tx: Sender<Vec<u8>>) -> Result<(), ProxyError>{
     
     while let Some(http_request) = rx.recv().await {
         let hexdata = hexdump(&http_request);

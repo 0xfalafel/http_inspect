@@ -7,6 +7,9 @@ use receive_requests::receive_http_requests;
 mod transmit_request;
 use transmit_request::forward_http_requests;
 
+mod forward_response;
+use forward_response::forward_response;
+
 mod http_utils;
 
 #[tokio::main]
@@ -21,16 +24,19 @@ async fn main() {
                 let (socket_read, socket_write) = split(socket);
                 
                 let (listener_tx, listener_rx) = mpsc::channel::<Vec<u8>>(32);
-                // let (remote_tx, remote_rx) = mpsc::channel::<Vec<u8>>(32);
+                let (remote_tx, remote_rx) = mpsc::channel::<Vec<u8>>(32);
 
                 tokio::spawn(async move {
                     receive_http_requests(socket_read, listener_tx).await
                 });
 
                 tokio::spawn(async move {
-                    forward_http_requests(listener_rx).await
+                    forward_http_requests(listener_rx, remote_tx).await
                 });
 
+                tokio::spawn(async move {
+                    forward_response(remote_rx, socket_write).await
+                });
             }
         }
     } else {
