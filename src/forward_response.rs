@@ -11,7 +11,6 @@ pub async fn forward_response(mut rx: Receiver<Vec<u8>>, mut socket: WriteHalf<T
         match socket.write_all(&http_request).await {
             Ok(()) => {},
             Err(_) => return Err(ProxyError::FailedToWriteToListener),
-
         }
     }
 

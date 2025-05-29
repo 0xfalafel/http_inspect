@@ -7,7 +7,7 @@ use tokio::sync::mpsc::Sender;
 /// * If it return None, the request is incomplete, and we should wait for the end of the request.
 /// * If it returns Some(len), we can extract a request of size `len` from the buffer.
 ///
-/// This function doesn't check if the HTTP is correct, it just use '\n\r\n\r' and the Content-Length header
+/// This function doesn't check if the HTTP is correct, it just use '\r\n\r\n' and the Content-Length header
 fn http_request_size(buffer: &[u8]) -> Option<usize> {
     // find the end of the HTTP header
     if let Some(end_header) = buffer.windows(4).position(|window| window == b"\x0d\x0a\x0d\x0a" ) {
