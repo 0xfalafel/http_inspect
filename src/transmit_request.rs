@@ -4,8 +4,10 @@ use std::fmt::{self, Display};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::{Receiver, Sender};
 use colored_hexdump::hexdump;
+use tokio::task::JoinHandle;
 
 use crate::http_utils::{find_header, get_header, remove_header};
+use crate::receive_requests::receive_http_requests;
 
 #[derive(Debug)]
 pub enum ProxyError {
@@ -112,8 +114,10 @@ fn extract_host(destination: &str) -> (Scheme, String) {
     (Scheme::Http, host)
 }
 
-pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>, mut tx: Sender<Vec<u8>>) -> Result<(), ProxyError>{
+pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>>) -> Result<(), ProxyError>{
     
+    let mut handle: JoinHandle<()>; 
+
     while let Some(http_request) = rx.recv().await {
         let hexdata = hexdump(&http_request);
         println!("{}", hexdata);
@@ -135,19 +139,25 @@ pub async fn forward_http_requests(mut rx: Receiver<Vec<u8>>, mut tx: Sender<Vec
         println!("{}", http_request_str);
 
         // TODO: Handle TLS stream if Scheme::Https
-        let mut tcp_stream = match tokio::net::TcpStream::connect(&host).await {
+        let tcp_stream = match tokio::net::TcpStream::connect(&host).await {
             Ok(stream) => stream,
             Err(_) => return Err(ProxyError::CouldNotConnectToRemote(host.clone()))
         };
 
+        let (socket_read, mut socket_write) = tokio::io::split(tcp_stream);
 
-        match tcp_stream.write_all(&http_request).await {
+        match socket_write.write_all(&http_request).await {
             Ok(()) => {},
             Err(_) => return Err(ProxyError::FailedToWriteToRemote(host.clone())),
         };
 
+        if !handle.is_finished() {
 
-        //tcp_stream.read(buf);
+            let tx = tx.clone();
+            handle = tokio::spawn(async move {
+                receive_http_requests(socket_read, tx).await
+            });
+        }
     }
 
     Ok(())
